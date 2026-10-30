@@ -185,7 +185,12 @@ async function pull(){
   }catch(e){}
 }
 
-/* ---------- setup + auth ---------- */
+/* ---------- setup + auth ----------
+   PASTE YOUR KEYS HERE ONCE (Supabase → Project Settings → API).
+   When both are filled, the app never asks for them again. */
+const SUPA_URL="https://wwphtvdkgvzyejuuamwi.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3cGh0dmRrZ3Z6eWVqdXVhbXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMTM5ODUsImV4cCI6MjEwODg4OTk4NX0.fO6pdR-MZIP2ddyWlnXFgA3_r1BdbQN8aGfIOTjdfYs";
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 function setupView(){
   $("nav").hidden=true;
   $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Connect your Supabase project (Project Settings → API).</p><input class="l" id="su" placeholder="Project URL  https://xxxx.supabase.co"><input class="l" id="sk" placeholder="anon public key"><button class="btn" id="go">Connect</button></div>';
@@ -193,16 +198,17 @@ function setupView(){
 }
 function authView(msg){
   $("nav").hidden=true;
-  $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Your lifts. Your weight. Your progress.</p><input class="l" id="em" type="email" placeholder="Email" autocomplete="email"><input class="l" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><div class="err" id="er">'+(msg||(navigator.onLine?"":"Connect to the internet once to sign in."))+'</div><button class="btn" id="in">Sign in</button><button class="btn" id="up" style="background:var(--c2);color:var(--tx)">Create account</button><p><a class="lnk" id="rs">Change Supabase project</a></p></div>';
+  $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Your lifts. Your weight. Your progress.</p><input class="l" id="em" type="email" placeholder="Email" autocomplete="email"><input class="l" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><div class="err" id="er">'+(msg||(navigator.onLine?"":"Connect to the internet once to sign in."))+'</div><button class="btn" id="in">Sign in</button><button class="btn" id="up" style="background:var(--c2);color:var(--tx)">Create account</button>'+(SUPA_URL&&SUPA_KEY?'':'<p><a class="lnk" id="rs">Change Supabase project</a></p>')+'</div>';
   const cred=()=>({email:$("em").value.trim(),password:$("pw").value});
   $("in").onclick=async()=>{const{error}=await sb.auth.signInWithPassword(cred());if(error)$("er").textContent=error.message};
   $("up").onclick=async()=>{const{data,error}=await sb.auth.signUp(cred());if(error)return $("er").textContent=error.message;if(!data.session)$("er").textContent="Check your email to confirm, then sign in."};
-  $("rs").onclick=()=>{ls.set("supa_url","");ls.set("supa_key","");setupView()};
+  if($("rs"))$("rs").onclick=()=>{ls.set("supa_url","");ls.set("supa_key","");setupView()};
 }
 function enter(){loadLocal();$("nav").hidden=false;render();flush().then(pull)}
 async function start(){
-  const u=ls.get("supa_url"),k=ls.get("supa_key");
+  const u=SUPA_URL||ls.get("supa_url"),k=SUPA_KEY||ls.get("supa_key");
   if(!u||!k)return setupView();
+  if(!ls.get("supa_url")){ls.set("supa_url",u);ls.set("supa_key",k)}
   try{sb=supabase.createClient(u,k)}catch(e){sb=null}
   if(!sb)return authView("Couldn’t load the Supabase library.");
   sb.auth.onAuthStateChange((ev,s)=>{
