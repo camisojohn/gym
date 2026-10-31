@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d10">
 <link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
-<title>IRON · Gym Log</title>
+<title>IRON – Personalized Gym Application</title>
 <script src="supabase.js"></script>
 <style>
 :root{--bg:#0b0d10;--c1:#14181d;--c2:#1c2128;--ln:#262d36;--tx:#f2f5f8;--mu:#8b96a3;--a:#b6ff3b;--b:#2de2c0;--r:#ff5d73}
@@ -151,7 +151,7 @@ function fig(name){
 }
 
 /* ---------- state + offline storage ---------- */
-const LB=2.20462,$=id=>document.getElementById(id);
+const MIN=3,LB=2.20462,$=id=>document.getElementById(id);
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 let sb,uid=null,ALL=[],WT=[],Q=[],flushing=false,tab="home",sel=null,fx=null,ov=false,unit=ls.get("unit")||"kg",selEx=PROG[0].ex[0][0];
 const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -185,12 +185,7 @@ async function pull(){
   }catch(e){}
 }
 
-/* ---------- setup + auth ----------
-   PASTE YOUR KEYS HERE ONCE (Supabase → Project Settings → API).
-   When both are filled, the app never asks for them again. */
-const SUPA_URL="https://wwphtvdkgvzyejuuamwi.supabase.co";
-const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3cGh0dmRrZ3Z6eWVqdXVhbXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMTM5ODUsImV4cCI6MjEwODg4OTk4NX0.fO6pdR-MZIP2ddyWlnXFgA3_r1BdbQN8aGfIOTjdfYs";
-if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+/* ---------- setup + auth ---------- */
 function setupView(){
   $("nav").hidden=true;
   $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Connect your Supabase project (Project Settings → API).</p><input class="l" id="su" placeholder="Project URL  https://xxxx.supabase.co"><input class="l" id="sk" placeholder="anon public key"><button class="btn" id="go">Connect</button></div>';
@@ -198,17 +193,16 @@ function setupView(){
 }
 function authView(msg){
   $("nav").hidden=true;
-  $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Your lifts. Your weight. Your progress.</p><input class="l" id="em" type="email" placeholder="Email" autocomplete="email"><input class="l" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><div class="err" id="er">'+(msg||(navigator.onLine?"":"Connect to the internet once to sign in."))+'</div><button class="btn" id="in">Sign in</button><button class="btn" id="up" style="background:var(--c2);color:var(--tx)">Create account</button>'+(SUPA_URL&&SUPA_KEY?'':'<p><a class="lnk" id="rs">Change Supabase project</a></p>')+'</div>';
+  $("app").innerHTML='<div class="auth"><h1 class="grad">IRON</h1><p class="mu">Your personalized gym application.</p><input class="l" id="em" type="email" placeholder="Email" autocomplete="email"><input class="l" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><div class="err" id="er">'+(msg||(navigator.onLine?"":"Connect to the internet once to sign in."))+'</div><button class="btn" id="in">Sign in</button><button class="btn" id="up" style="background:var(--c2);color:var(--tx)">Create account</button><p><a class="lnk" id="rs">Change Supabase project</a></p></div>';
   const cred=()=>({email:$("em").value.trim(),password:$("pw").value});
   $("in").onclick=async()=>{const{error}=await sb.auth.signInWithPassword(cred());if(error)$("er").textContent=error.message};
   $("up").onclick=async()=>{const{data,error}=await sb.auth.signUp(cred());if(error)return $("er").textContent=error.message;if(!data.session)$("er").textContent="Check your email to confirm, then sign in."};
-  if($("rs"))$("rs").onclick=()=>{ls.set("supa_url","");ls.set("supa_key","");setupView()};
+  $("rs").onclick=()=>{ls.set("supa_url","");ls.set("supa_key","");setupView()};
 }
 function enter(){loadLocal();$("nav").hidden=false;render();flush().then(pull)}
 async function start(){
-  const u=SUPA_URL||ls.get("supa_url"),k=SUPA_KEY||ls.get("supa_key");
+  const u=ls.get("supa_url"),k=ls.get("supa_key");
   if(!u||!k)return setupView();
-  if(!ls.get("supa_url")){ls.set("supa_url",u);ls.set("supa_key",k)}
   try{sb=supabase.createClient(u,k)}catch(e){sb=null}
   if(!sb)return authView("Couldn’t load the Supabase library.");
   sb.auth.onAuthStateChange((ev,s)=>{
@@ -244,9 +238,9 @@ function vHome(){
   const last={};ALL.forEach(s=>{if(!last[s.day]||s.performed_on>last[s.day])last[s.day]=s.performed_on});
   const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t).length;
   const tot=day.ex.reduce((a,e)=>a+e[1],0),dn=day.ex.reduce((a,e)=>a+Math.min(cnt(e[0]),e[1]),0);
-  const fin=dn>=tot,started=dn>0;
+  const fin=dn>=tot,started=dn>0,left=(tot-dn)*MIN;
   let h='<p class="mu" style="margin:6px 4px 0">'+new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"})+'</p>';
-  h+='<div class="card hero" style="display:block"><div class="mu" style="letter-spacing:1.5px">'+(di===auto?"TODAY’S WORKOUT":"SELECTED WORKOUT")+'</div><div class="big grad">Day '+(di+1)+'</div><b style="font-size:17px">'+day.n.split("· ")[1]+'</b><span class="mu">'+day.ex.length+' exercises · '+tot+' sets · about '+Math.round(tot*3)+' min</span><div class="bar"><i style="width:'+Math.round(dn/tot*100)+'%"></i></div><div class="mu">'+(fin?"All sets done 🔥":dn+" of "+tot+" sets done")+'</div><button class="btn" data-go="train" data-fx="-1">'+(fin?"View workout":started?"Continue workout":"Start workout")+'</button></div>';
+  h+='<div class="card hero" style="display:block"><div class="mu" style="letter-spacing:1.5px">'+(di===auto?"TODAY’S WORKOUT":"SELECTED WORKOUT")+'</div><div class="big grad">Day '+(di+1)+'</div><b style="font-size:17px">'+day.n.split("· ")[1]+'</b><span class="mu">'+day.ex.length+' exercises · '+tot+' sets · '+(fin?"finished":"about "+left+" min left")+'</span><div class="bar"><i style="width:'+Math.round(dn/tot*100)+'%"></i></div><div class="mu">'+(fin?"All sets done 🔥":dn+" of "+tot+" sets done")+'</div><button class="btn" data-go="train" data-fx="-1">'+(fin?"View workout":started?"Continue workout":"Start workout")+'</button></div>';
   h+='<h2>Your program</h2><div class="row" style="margin:0">'+PROG.map((d,i)=>{
     const st=i===auto?(dn>=tot&&di===auto&&started?"Done ✓":"Up next"):(last[i]?"Last "+last[i].slice(5):"Not yet");
     return'<button class="dayc'+(i===di?" on":"")+'" data-day="'+i+'"><b>Day '+(i+1)+'</b><span>'+st+'</span></button>'}).join("")+'</div>';
@@ -274,8 +268,8 @@ function vTrain(){
   const di=curDay(),day=PROG[di],t=today(),N=day.ex.length;
   const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t).length;
   if(fx===null){const k=day.ex.findIndex(e=>cnt(e[0])<e[1]);fx=k<0?N:k}
-  const doneN=day.ex.filter(e=>cnt(e[0])>=e[1]).length;
-  let h='<div class="top2"><div><b>'+day.n+'</b><div class="mu">'+doneN+' of '+N+' exercises done</div></div><button class="ghost" style="flex:none;padding:10px 14px" data-ov="1">'+(ov?"✕ Close":"☰ Overview")+'</button></div>';
+  const doneN=day.ex.filter(e=>cnt(e[0])>=e[1]).length,left=day.ex.reduce((a,e)=>a+Math.max(0,e[1]-cnt(e[0])),0)*MIN;
+  let h='<div class="top2"><div><b>'+day.n+'</b><div class="mu">'+doneN+' of '+N+' exercises done · '+(left>0?"~"+left+" min left":"finished")+'</div></div><button class="ghost" style="flex:none;padding:10px 14px" data-ov="1">'+(ov?"✕ Close":"☰ Overview")+'</button></div>';
   h+='<div class="seg">'+day.ex.map((e,i)=>'<i class="'+(cnt(e[0])>=e[1]?"d":"")+(i===fx&&!ov?" c":"")+'"></i>').join("")+'</div>';
   if(ov){
     h+='<div class="row" style="margin:10px 0 0">'+PROG.map((d,i)=>'<button class="dayc'+(i===di?" on":"")+'" data-day="'+i+'"><b>Day '+(i+1)+'</b></button>').join("")+'</div>';
