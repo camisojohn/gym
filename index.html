@@ -63,6 +63,8 @@ input.l{text-align:left}
 .seg i.d{background:linear-gradient(90deg,var(--a),var(--b))}
 .seg i.c{background:var(--tx)}
 .ghost:disabled{opacity:.35}
+.set.drop span{color:var(--a);font-weight:800}
+.set.drop input{border-color:#3d4f22}
 .tip{color:var(--a);font-size:14px;margin-top:4px}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(20,24,29,.92);backdrop-filter:blur(12px);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
 nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0 10px;font-size:12px;font-weight:600}
@@ -94,7 +96,7 @@ const PROG=[
 ["Seated Cable Row",3,8,12,"Sit tall. Pull the handle to your belly, squeeze shoulder blades together, return slowly."],
 ["Lateral Raises",3,12,20,"Light weights. Raise arms to shoulder height with a slight elbow bend, lower slowly."],
 ["Bicep Curls",2,10,15,"Elbows pinned to your sides. Curl up, squeeze, lower for 2–3 seconds."],
-["Triceps Pushdown",2,10,15,"Elbows tucked in. Push down until arms are straight, control the way up."]]},
+["Triceps Pushdown",2,10,15,"Use the rope and spread the ends apart at the bottom. Elbows tucked in, control the way up. On your last set you can tap ↓ Drop set: lower the weight about 25% and keep going."]]},
 {n:"Day 2 · Upper",ex:[
 ["Incline Chest Press",3,8,12,"Set the seat so handles are at upper-chest height. Press forward without shrugging."],
 ["Pull-ups",3,6,10,"Start from a full hang, pull your chest toward the bar. Use an assisted machine or band if needed."],
@@ -151,7 +153,7 @@ function fig(name){
 }
 
 /* ---------- state + offline storage ---------- */
-const MIN=3,LB=2.20462,$=id=>document.getElementById(id);
+const DROP=["Triceps Pushdown"],MIN=3,LB=2.20462,$=id=>document.getElementById(id);
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 let sb,uid=null,ALL=[],WT=[],Q=[],flushing=false,tab="home",sel=null,fx=null,ov=false,unit=ls.get("unit")||"kg",selEx=PROG[0].ex[0][0];
 const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -236,7 +238,7 @@ const weekCount=()=>{const n=Date.now();return new Set(ALL.filter(s=>n-new Date(
 function vHome(){
   const di=curDay(),auto=autoDay(),day=PROG[di],t=today();
   const last={};ALL.forEach(s=>{if(!last[s.day]||s.performed_on>last[s.day])last[s.day]=s.performed_on});
-  const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t).length;
+  const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t&&s.set_no<100).length;
   const tot=day.ex.reduce((a,e)=>a+e[1],0),dn=day.ex.reduce((a,e)=>a+Math.min(cnt(e[0]),e[1]),0);
   const fin=dn>=tot,started=dn>0,left=(tot-dn)*MIN;
   let h='<p class="mu" style="margin:6px 4px 0">'+new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"})+'</p>';
@@ -255,18 +257,19 @@ function vHome(){
 }
 function exCard(day,ei){
   const[n,sets,lo,hi,cue]=day.ex[ei],t=today();
-  const td=ALL.filter(s=>s.exercise===n&&s.performed_on===t),h0=hist(n,t),last=h0[h0.length-1];
+  const all=ALL.filter(s=>s.exercise===n&&s.performed_on===t),td=all.filter(s=>s.set_no<100),dd=all.filter(s=>s.set_no>=100).sort((a,b)=>a.set_no-b.set_no);
+  const h0=hist(n,t),last=h0[h0.length-1],ln=last?last.sets.filter(s=>s.set_no<100):[],ld=last?last.sets.filter(s=>s.set_no>=100):[];
   const rows=Math.max(sets,td.length?Math.max(...td.map(s=>s.set_no))+1:0);
-  const tip=last&&last.sets.length>=sets&&last.sets.every(s=>s.reps>=hi)?'<div class="tip">⬆ You hit '+hi+' reps on every set last time. Add weight today.</div>':"";
-  let h='<div class="card ex"><h3 style="font-size:22px">'+n+'</h3><div class="mu">'+sets+' × '+lo+'–'+hi+(last?' · last: '+last.sets.map(s=>fmt(s.kg)+'×'+s.reps).join(", ")+" "+unit:"")+'</div>'+tip;
-  for(let i=0;i<rows;i++){
-    const c=td.find(s=>s.set_no===i),p=last&&(last.sets[i]||last.sets[last.sets.length-1]);
-    h+='<div class="set" data-ex="'+n+'" data-i="'+i+'"><span>'+(i+1)+'</span><input type="number" inputmode="decimal" placeholder="'+(p?fmt(p.kg):unit)+'" data-pk="'+(p?fmt(p.kg):"")+'" value="'+(c?fmt(c.kg):"")+'"><input type="number" inputmode="numeric" placeholder="'+(p?p.reps:"reps")+'" data-pr="'+(p?p.reps:"")+'" value="'+(c?c.reps:"")+'"><button class="ok'+(c?" d":"")+'" data-save="1">✓</button></div>'}
-  return h+'<div class="row"><button class="ghost" data-add="'+n+'">+ Set</button><button class="ghost" data-how="'+ei+'">▶ How to do it</button></div><div class="how" id="how'+ei+'">'+fig(n)+cue+'</div></div>';
+  const tip=ln.length>=sets&&ln.every(s=>s.reps>=hi)?'<div class="tip">⬆ You hit '+hi+' reps on every set last time. Add weight today.</div>':"";
+  const inp=(i,cls,lab,c,p)=>'<div class="set'+cls+'" data-ex="'+n+'" data-i="'+i+'"><span>'+lab+'</span><input type="number" inputmode="decimal" placeholder="'+(p?fmt(p.kg):unit)+'" data-pk="'+(p?fmt(p.kg):"")+'" value="'+(c?fmt(c.kg):"")+'"><input type="number" inputmode="numeric" placeholder="'+(p?p.reps:"reps")+'" data-pr="'+(p?p.reps:"")+'" value="'+(c?c.reps:"")+'"><button class="ok'+(c?" d":"")+'" data-save="1">✓</button></div>';
+  let h='<div class="card ex"><h3 style="font-size:22px">'+n+'</h3><div class="mu">'+sets+' × '+lo+'–'+hi+(ln.length?' · last: '+ln.map(s=>fmt(s.kg)+'×'+s.reps).join(", ")+(ld.length?" · drops "+ld.map(s=>fmt(s.kg)+'×'+s.reps).join(", "):"")+" "+unit:"")+'</div>'+tip;
+  for(let i=0;i<rows;i++)h+=inp(i,"",i+1,td.find(s=>s.set_no===i),ln[i]||ln[ln.length-1]);
+  dd.forEach((c,k)=>{h+=inp(c.set_no,"drop","↓",c,ld[k])});
+  return h+'<div class="row"><button class="ghost" data-add="'+n+'">+ Set</button>'+(DROP.includes(n)?'<button class="ghost" data-drop="'+n+'">↓ Drop set</button>':"")+'<button class="ghost" data-how="'+ei+'">▶ How to do it</button></div><div class="how" id="how'+ei+'">'+fig(n)+cue+'</div></div>';
 }
 function vTrain(){
   const di=curDay(),day=PROG[di],t=today(),N=day.ex.length;
-  const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t).length;
+  const cnt=n=>ALL.filter(s=>s.exercise===n&&s.performed_on===t&&s.set_no<100).length;
   if(fx===null){const k=day.ex.findIndex(e=>cnt(e[0])<e[1]);fx=k<0?N:k}
   const doneN=day.ex.filter(e=>cnt(e[0])>=e[1]).length,left=day.ex.reduce((a,e)=>a+Math.max(0,e[1]-cnt(e[0])),0)*MIN;
   let h='<div class="top2"><div><b>'+day.n+'</b><div class="mu">'+doneN+' of '+N+' exercises done · '+(left>0?"~"+left+" min left":"finished")+'</div></div><button class="ghost" style="flex:none;padding:10px 14px" data-ov="1">'+(ov?"✕ Close":"☰ Overview")+'</button></div>';
@@ -322,7 +325,7 @@ function saveRow(row,auto){
 }
 /* ---------- actions (all work offline, sync later) ---------- */
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-u],[data-t],[data-go],[data-fx],[data-ov],[data-next],[data-prev],[data-skip],[data-day],[data-add],[data-how],[data-save],[data-addw],[data-delw],[data-out]");if(!t||!uid)return;
+  const t=e.target.closest("[data-u],[data-t],[data-go],[data-fx],[data-ov],[data-next],[data-prev],[data-skip],[data-day],[data-add],[data-drop],[data-how],[data-save],[data-addw],[data-delw],[data-out]");if(!t||!uid)return;
   const d=t.dataset;
   if(d.u){unit=d.u;ls.set("unit",unit);render()}
   else if(d.t||d.go){if(d.fx!==undefined)fx=+d.fx<0?null:+d.fx;if(d.go)ov=false;tab=d.t||d.go;render();scrollTo(0,0)}
@@ -334,7 +337,12 @@ document.addEventListener("click",e=>{
   else if(d.day!==undefined){sel=+d.day;fx=null;render()}
   else if(d.how!==undefined)$("how"+d.how).classList.toggle("open");
   else if(d.out){if(navigator.onLine)sb.auth.signOut();else toast("Go online to sign out")}
-  else if(d.add){const r=document.querySelectorAll('.set[data-ex="'+d.add+'"]'),n=r.length,last=r[n-1],c=last.cloneNode(true);c.dataset.i=n;c.firstChild.textContent=n+1;c.querySelectorAll("input").forEach(i=>i.value="");c.querySelector(".ok").classList.remove("d");last.after(c)}
+  else if(d.add){const r=document.querySelectorAll('.set:not(.drop)[data-ex="'+d.add+'"]'),n=r.length,last=r[n-1],c=last.cloneNode(true);c.dataset.i=n;c.firstChild.textContent=n+1;c.querySelectorAll("input").forEach(i=>i.value="");c.querySelector(".ok").classList.remove("d");last.after(c)}
+  else if(d.drop){const all=document.querySelectorAll('.set[data-ex="'+d.drop+'"]'),prev=all[all.length-1],k=document.querySelectorAll('.set.drop[data-ex="'+d.drop+'"]').length,c=prev.cloneNode(true),pi=prev.querySelectorAll("input");
+    const w=parseFloat(pi[0].value)||parseFloat(pi[0].dataset.pk)||0,nw=w?Math.round(w*0.75*2)/2:"";
+    c.className="set drop";c.dataset.i=100+k;c.firstChild.textContent="↓";
+    const ci=c.querySelectorAll("input");ci[0].value=nw;ci[0].dataset.pk=nw;ci[1].value="";ci[1].dataset.pr="";ci[1].placeholder="reps";
+    c.querySelector(".ok").classList.remove("d");prev.after(c);ci[1].focus();toast(w?"Drop to "+nw+" "+unit+" · go to failure":"Enter a lighter weight")}
   else if(d.save)saveRow(t.closest(".set"),false);
   else if(d.addw){const v=parseFloat($("wv").value);if(!(v>0))return;
     const rec={user_id:uid,logged_on:today(),kg:Math.round(toKg(v)*100)/100};
